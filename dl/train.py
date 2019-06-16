@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import pickle
 from VAE import VAE
+from pyprind import ProgBar
 
 
 class Trainer(object):
@@ -11,13 +12,11 @@ class Trainer(object):
             data_train,
             data_test,
             batch_size=256,
-            n_epochs=10,
+            n_epochs=3,
             log_per_epoch=1,
             print_per_epoch=1,
             sess=None,
     ):
-        if sess is None:
-            sess = tf.Session()
         self.model = model
         self.data_train = data_train
         self.data_test = data_test
@@ -25,9 +24,12 @@ class Trainer(object):
         self.n_epochs = n_epochs
         self.log_per_epoch = log_per_epoch
         self.print_per_epoch = print_per_epoch
+        if sess is None:
+            sess = tf.Session()
         self.sess = sess
 
     def train(self):
+
         with self.sess.as_default() as sess:
             # initialize
             init_op = tf.initializers.global_variables()
@@ -35,14 +37,19 @@ class Trainer(object):
 
             loss_trn = []
             loss_val = []
+            n_batches = np.ceil(len(self.data_train) / self.batch_size)
 
             for epoch in range(self.n_epochs):
                 print("\n--------- epoch {} --------".format(epoch))
+                pbar = ProgBar(n_batches)
                 loss_trn_batch = []
-                for batch in np.array_split(self.data_train, np.ceil(len(self.data_train) / self.batch_size)):
+                idx = range(len(self.data_train))
+                np.random.shuffle(idx)
+                for batch in np.array_split(self.data_train[idx], n_batches):
                     loss = self.model.train_step(batch)
                     loss_trn_batch.append(loss)
-
+                    pbar.update(1)
+                pbar.stop()
                 if epoch % self.log_per_epoch == 0:
                     loss_trn.append(np.mean(loss_trn_batch))
                     loss_val.append(self.model.test_step(self.data_test))

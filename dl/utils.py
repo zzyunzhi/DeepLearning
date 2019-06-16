@@ -16,3 +16,9 @@ def pprint(tensor, msg=""):
                                            #                                            tensor_to_print,
                                            output_stream=sys.stdout)]):
         return tf.check_numerics(tensor, tensor.name)
+
+
+def conv2d_weights_norm(name, shape):
+    # data based initialization
+    tf.get_variable(name, shape=shape, dtype=tf.float32)
+
