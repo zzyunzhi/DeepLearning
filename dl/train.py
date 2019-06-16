@@ -56,6 +56,7 @@ if __name__ == '__main__':
         data = pickle.load(f)
     data_train = data['train']
     data_test = data['test']
+
     model = VAE()
     trainer = Trainer(model, data_train, data_test)
     trainer.train()

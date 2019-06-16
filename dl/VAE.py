@@ -32,7 +32,6 @@ def residual_stack(inputs):
 
 
 class VAE(object):
-
     def __init__(
             self,
     ):
