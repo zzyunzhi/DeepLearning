@@ -1,2 +1,2 @@
 # tensorflow implementation
-- Variational Auto Encoder
+- Variational Auto Encoder (VAE)
