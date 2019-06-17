@@ -29,11 +29,9 @@ class Trainer(object):
         self.sess = sess
 
     def train(self):
-
         with self.sess.as_default() as sess:
-            # initialize
-            init_op = tf.initializers.global_variables()
-            sess.run(init_op)
+            print('initializing...')
+            sess.run(tf.initializers.global_variables())
 
             loss_trn = []
             loss_val = []
@@ -43,7 +41,7 @@ class Trainer(object):
                 print("\n--------- epoch {} --------".format(epoch))
                 pbar = ProgBar(n_batches)
                 loss_trn_batch = []
-                idx = range(len(self.data_train))
+                idx = np.arange(len(self.data_train))
                 np.random.shuffle(idx)
                 for batch in np.array_split(self.data_train[idx], n_batches):
                     loss = self.model.train_step(batch)

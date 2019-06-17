@@ -6,34 +6,46 @@ from layers import *
 
 class VAE(object):
     def __init__(self):
-        self.x_size = (32, 32, 3)
+        self.x_size = [32, 32, 3]
         self.verbose = True
         # use weights normalization
-        self.weights_norm = True
+        self.weights_norm = False
+        self.initialized = False
 
         with tf.variable_scope('vae'):
-            self.x_sym = tf.placeholder(tf.float32, (None,) + self.x_size, name='x_sym')
-            self.lr = tf.placeholder(tf.float32, [], name='lr')
-            self.loss, self.op, self.x_encoded_mean = self.build_loss()
-            with tf.variable_scope('decoder', reuse=True):
-                self.z_sym = tf.placeholder(tf.float32, [None, 1], name='z_sym')
-                self.z_decoded_flatten = self.decode_sym(self.z_sym).sample()
-                self.z_decoded = tf.reshape(self.z_decoded_flatten, [-1, np.prod(self.x_size)])
+            self.x_sym, self.init_batch_size, self.lr, self.z_sym = self.build_ph()
+            self.build_graph()
+
+
+    def build_ph(self):
+        x_sym = tf.placeholder(tf.float32, [None, *self.x_size], name='x_sym')
+        init_batch_size = tf.placeholder(tf.int32, [], name='init_batch_size')
+        lr = tf.placeholder(tf.float32, [], name='lr')
+        with tf.variable_scope('decoder'):
+            z_sym = tf.placeholder(tf.float32, [None, 1], name='z_sym')
+        return x_sym, init_batch_size, lr, z_sym
+
+    def build_graph(self):
+        self.loss, self.op, self.x_encoded_mean = self.build_loss()
+        with tf.variable_scope('decoder', reuse=True):
+            self.z_decoded_flatten = self.decode_sym(self.z_sym).sample()
+            self.z_decoded = tf.reshape(self.z_decoded_flatten, [-1, np.prod(self.x_size)])
 
     def encode_sym(self, x_sym):
         print('before encoding sym', x_sym.get_shape().as_list())
         if self.weights_norm:
-            nn = conv2d_wn(x_sym, 128, (4, 4), (2, 2), 'conv_relu_0', tf.nn.relu, True)
-            nn = conv2d_wn(nn, 256, (4, 4), (2, 2), 'conv_relu_1', tf.nn.relu, True)
-            nn = conv2d_wn(nn, 256, (3, 3), (1, 1), 'conv_2', None, True)
+            nn = conv2d_wn(x_sym, 32, (4, 4), (2, 2), 'conv_relu_0', tf.nn.relu, self.initialized)
+            nn = conv2d_wn(nn, 64, (4, 4), (2, 2), 'conv_relu_1', tf.nn.relu, self.initialized)
+            nn = conv2d_wn(nn, 64, (3, 3), (1, 1), 'conv_2', None, self.initialized)
+            nn = residual_stack(nn, 'encode_sym_res_stack', self.initialized, weights_norm=True)
         else:
-            nn = tf.layers.conv2d(inputs=x_sym, filters=128, kernel_size=(4, 4), strides=(2, 2),
+            nn = tf.layers.conv2d(inputs=x_sym, filters=32, kernel_size=(4, 4), strides=(2, 2),
                                   padding='same', activation=tf.nn.relu, name='conv_relu_0')
-            nn = tf.layers.conv2d(inputs=nn, filters=256, kernel_size=(4, 4), strides=(2, 2),
+            nn = tf.layers.conv2d(inputs=nn, filters=64, kernel_size=(4, 4), strides=(2, 2),
                                   padding='same', activation=tf.nn.relu, name='conv_relu_1')
-            nn = tf.layers.conv2d(inputs=nn, filters=256, kernel_size=(3, 3), strides=(1, 1),
+            nn = tf.layers.conv2d(inputs=nn, filters=64, kernel_size=(3, 3), strides=(1, 1),
                                   padding='same', name='conv_2')
-        nn = residual_stack(nn)
+            nn = residual_stack(nn, 'encode_sym_res_stack', self.initialized, weights_norm=False)
         nn = tf.layers.flatten(nn)
         loc = tf.layers.dense(nn, 1, name='encode_sym_mean')
         scale = tf.exp(tf.layers.dense(nn, 1, name='encode_sym_std'))
@@ -44,18 +56,21 @@ class VAE(object):
         print('before decoding sym', z_sym.get_shape().as_list())
         nn = tf.reshape(z_sym, [-1, 1, 1, 1])
         if self.weights_norm:
-            nn = conv2d_wn(nn, 256, (3, 3), (1, 1), 'conv_0', None, True)
-            nn = residual_stack(nn)
-            nn = conv2d_wn(nn, 128, (4, 4), (2, 2), 'conv_relu_1', tf.nn.relu, True, transpose=True)
-            nn = conv2d_wn(nn, self.x_size[2], (4, 4), (2, 2), 'conv_2', None, True, transpose=True)
+            nn = conv2d_wn(nn, 64, (3, 3), (1, 1), 'conv_0', None, self.initialized)
+            nn = residual_stack(nn, 'decode_sym_res_stack', self.initialized, weights_norm=True)
+            nn = conv2d_wn_transpose(nn, 32, (4, 4), (2, 2), 'conv_relu_1', tf.nn.relu, self.initialized,
+                                     shape=[self.init_batch_size, *nn.get_shape().as_list()[1:]])
+            nn = conv2d_wn_transpose(nn, self.x_size[2], (4, 4), (2, 2), 'conv_2', None, self.initialized,
+                                     shape=[self.init_batch_size, *nn.get_shape().as_list()[1:]])
         else:
-            nn = tf.layers.conv2d(inputs=nn, filters=256, kernel_size=(3, 3), strides=(1, 1),
+            nn = tf.layers.conv2d(inputs=nn, filters=64, kernel_size=(3, 3), strides=(1, 1),
                                   padding='same', name='conv_0')
-            nn = residual_stack(nn)
-            nn = tf.layers.conv2d_transpose(inputs=nn, filters=128, kernel_size=(4, 4), strides=(2, 2),
+            nn = residual_stack(nn, 'decode_sym_res_stack', self.initialized, weights_norm=False)
+            nn = tf.layers.conv2d_transpose(inputs=nn, filters=32, kernel_size=(4, 4), strides=(2, 2),
                                             padding='same', activation=tf.nn.relu, name='conv_relu_1')
             nn = tf.layers.conv2d_transpose(inputs=nn, filters=self.x_size[2], kernel_size=(4, 4), strides=(2, 2),
                                             padding='same', name='conv_2')
+        print('after conv layers...', nn.get_shape().as_list())
         nn = tf.layers.flatten(nn)
         loc = tf.layers.dense(nn, np.prod(self.x_size), name='decode_sym_mean')
         scale_diag = tf.exp(tf.layers.dense(nn, np.prod(self.x_size), name='decode_sym_std'))
@@ -82,11 +97,14 @@ class VAE(object):
         return loss, op, x_encoded_mean
 
     def train_step(self, batch, lr=1e-4):
+        feed_dict = {self.x_sym: batch, self.lr: lr}
         sess = tf.get_default_session()
-        loss, _ = sess.run([self.loss, self.op], feed_dict={
-            self.x_sym: batch,
-            self.lr: lr,
-        })
+        if not self.initialized:
+            feed_dict[self.init_batch_size] = len(batch)
+            loss, _ = sess.run([self.loss, self.op], feed_dict=feed_dict)
+            self.initialized = True
+        else:
+            loss, _ = sess.run([self.loss, self.op], feed_dict=feed_dict)
         return loss
 
     def test_step(self, batch):
