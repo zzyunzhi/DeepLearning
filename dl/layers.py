@@ -23,12 +23,12 @@ def conv2d_wn(inputs, n_filters, kernel_size, strides, scope, activation, initia
             g_init = 1/tf.sqrt(nn_var+1e-8)
             b_init = -nn_mean * g_init
             print('before getting variable')
-            _ = tf.Variable(g_init, 'g', trainable=True, dtype=tf.float32)
+            _ = tf.Variable(g_init, trainable=True, name='g', dtype=tf.float32)
             print('after getting g')
-            _ = tf.Variable(b_init, 'b', trainable=True, dtype=tf.float32)
+            _ = tf.Variable(b_init, trainable=True, name='b', dtype=tf.float32)
             print('after getting b')
             nn = tf.reshape(g_init, [1, 1, 1, n_filters]) * nn
-            nn = tf.bias_add(nn, b_init)
+            nn = tf.nn.bias_add(nn, b_init)
 
             if activation is not None:
                 nn = activation(nn)
@@ -71,8 +71,8 @@ def conv2d_wn_transpose(inputs, n_filters, kernel_size, strides, scope, activati
             nn_mean, nn_var = tf.nn.moments(nn, [0, 1, 2])
             g_init = 1/tf.sqrt(nn_var+1e-8)
             b_init = -nn_mean * g_init
-            _ = tf.Variable(g_init, 'g', dtype=tf.float32)
-            _ = tf.Variable(b_init, 'b', dtype=tf.float32)
+            _ = tf.Variable(g_init, trainable=True, name='g', dtype=tf.float32)
+            _ = tf.Variable(b_init, trainable=True, name='b', dtype=tf.float32)
             nn = tf.reshape(g_init, [1, 1, 1, n_filters]) * (nn + tf.reshape(b_init, [1, 1, 1, n_filters]))
 
             if activation is not None:

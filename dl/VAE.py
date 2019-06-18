@@ -12,9 +12,8 @@ class VAE(object):
         self.weights_norm = False
         self.initialized = False
 
-        with tf.variable_scope('vae'):
-            self.x_sym, self.init_batch_size, self.lr, self.z_sym = self.build_ph()
-            self.build_graph()
+        self.x_sym, self.init_batch_size, self.lr, self.z_sym = self.build_ph()
+        self.build_graph()
 
 
     def build_ph(self):
@@ -97,11 +96,14 @@ class VAE(object):
         return loss, op, x_encoded_mean
 
     def train_step(self, batch, lr=1e-4):
+        print('calling train_step with self.initialized', self.initialized)
         feed_dict = {self.x_sym: batch, self.lr: lr}
         sess = tf.get_default_session()
         if not self.initialized:
             feed_dict[self.init_batch_size] = len(batch)
-            loss, _ = sess.run([self.loss, self.op], feed_dict=feed_dict)
+            init_op = tf.initializers.global_variables()
+            _ = sess.run(init_op, feed_dict=feed_dict)
+            _, loss = sess.run([self.op, self.loss], feed_dict=feed_dict)
             self.initialized = True
         else:
             loss, _ = sess.run([self.loss, self.op], feed_dict=feed_dict)

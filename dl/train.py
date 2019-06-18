@@ -29,10 +29,7 @@ class Trainer(object):
         self.sess = sess
 
     def train(self):
-        with self.sess.as_default() as sess:
-            print('initializing...')
-            sess.run(tf.initializers.global_variables())
-
+        with self.sess.as_default() as _:
             loss_trn = []
             loss_val = []
             n_batches = np.ceil(len(self.data_train) / self.batch_size)
