@@ -29,36 +29,26 @@ class Trainer(object):
         self.sess = sess
 
     def train(self):
-        with self.sess.as_default() as _:
-            loss_trn = []
-            loss_val = []
+        with self.sess.as_default() as sess:
+            sess.run(tf.initializers.global_variables())
+            loss_train = []
+            loss_test = []
             n_batches = np.ceil(len(self.data_train) / self.batch_size)
 
             for epoch in range(self.n_epochs):
                 print("\n--------- epoch {} --------".format(epoch))
                 pbar = ProgBar(n_batches)
-                loss_trn_batch = []
+                loss_train_batch = []
                 idx = np.arange(len(self.data_train))
                 np.random.shuffle(idx)
                 for batch in np.array_split(self.data_train[idx], n_batches):
                     loss = self.model.train_step(batch)
-                    loss_trn_batch.append(loss)
+                    print(loss)
+                    loss_train_batch.append(loss)
                     pbar.update(1)
                 pbar.stop()
                 if epoch % self.log_per_epoch == 0:
-                    loss_trn.append(np.mean(loss_trn_batch))
-                    loss_val.append(self.model.test_step(self.data_test))
+                    loss_train.append(np.mean(loss_train_batch))
+                    loss_test.append(self.model.test_step(self.data_test))
                 if epoch % self.print_per_epoch == 0:
-                    print("at epoch", epoch, loss_trn[-1], loss_val[-1])
-
-
-if __name__ == '__main__':
-
-    with open('./hw3-q2.pkl', 'rb') as f:
-        data = pickle.load(f)
-    data_train = data['train']
-    data_test = data['test']
-
-    model = VAE()
-    trainer = Trainer(model, data_train, data_test)
-    trainer.train()
+                    print("at epoch", epoch, loss_train[-1], loss_test[-1])
