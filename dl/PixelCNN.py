@@ -34,8 +34,16 @@ class PixelCNN(object):
         self.out_hidden_dim = 16
         self.n_residual_blocks = 12
 
+        print('building training graph...')
         self.inputs = tf.placeholder(tf.float32, (None,) + img_size, name="inputs")
-        self.loss, self.train_op, self.predictions = self.build_graph()
+        self.loss, self.train_op, logits = self.build_graph()
+
+        print('building inference graph...')
+        with tf.variable_scope('inference'):
+            probs = tf.nn.softmax(logits, axis=-1)
+            self.samples_det = tf.argmax(probs, axis=-1)
+            samples_flattened = tf.random.categorical(logits=tf.reshape(logits, [-1, self.color_dim]), num_samples=1)
+            self.samples = tf.reshape(samples_flattened, [-1, self.height, self.width, self.n_channels])
 
     def build_graph(self):
         nn = conv2d_mask(
@@ -60,8 +68,6 @@ class PixelCNN(object):
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
             labels=inputs_one_hot, logits=logits, name='loss',
         ))
-        probs = tf.nn.softmax(logits, axis=-1)
-        predictions = tf.argmax(probs, axis=-1, name='predictions')
 
         train_op = tf.train.RMSPropOptimizer(self.learning_rate)
         grads_vars = train_op.compute_gradients(loss)
@@ -69,7 +75,7 @@ class PixelCNN(object):
             (tf.clip_by_value(grad, -self.grad_clip, self.grad_clip), var) for grad, var in grads_vars
         ]
         train_op = train_op.apply_gradients(grads_vars_clipped)
-        return loss, train_op, predictions
+        return loss, train_op, logits
 
     def train_step(self, batch):
         sess = tf.get_default_session()
@@ -83,14 +89,21 @@ class PixelCNN(object):
 
     def reconstruct_images(self, batch):
         sess = tf.get_default_session()
-        images = sess.run(self.predictions, feed_dict={self.inputs: batch})
+        images = sess.run(self.samples_det, feed_dict={self.inputs: batch})
         return images
 
-    def generate(self, num_samples):
+    def generate_images(self, n_samples):
         sess = tf.get_default_session()
-        samples = np.zeros((num_samples, self.height, self.width, self.n_channels), dtype='float32')
+        if n_samples == 1:
+            run_ph = self.samples_det
+        else:
+            run_ph = self.samples
+        images = np.zeros((n_samples, self.height, self.width, self.n_channels), dtype='float32')
         for i in range(self.height):
             for j in range(self.width):
                 for k in range(self.n_channels):
-                    samples[:, i, j, k] = sess.run(self.predictions, feed_dict={self.inputs: samples})[:, i, j, k]
-        return samples
+                    images[:, i, j, k] = sess.run(
+                        run_ph,
+                        feed_dict={self.inputs: images}
+                    )[:, i, j, k]
+        return images

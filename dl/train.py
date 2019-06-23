@@ -43,7 +43,6 @@ class Trainer(object):
                 np.random.shuffle(idx)
                 for batch in np.array_split(self.data_train[idx], n_batches):
                     loss = self.model.train_step(batch)
-                    print(loss)
                     loss_train_batch.append(loss)
                     pbar.update(1)
                 pbar.stop()
