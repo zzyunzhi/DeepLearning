@@ -2,7 +2,9 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 import numpy as np
 from layers import conv2d_mask
-from utils import pprint
+from utils import *
+from datetime import datetime
+import matplotlib.pyplot as plt
 
 
 def residual_block(layer_in, hidden_dim, scope, reuse=None):
@@ -24,10 +26,12 @@ class PixelCNN(object):
             self,
             img_size,
             color_dim,
+            visualize_batch,
     ):
         
         self.height, self.width, self.n_channels = img_size
         self.color_dim = color_dim
+        self.visualize_batch = visualize_batch
         self.learning_rate = 1e-3
         self.grad_clip = 1
         self.hidden_dim = 16
@@ -87,6 +91,12 @@ class PixelCNN(object):
         loss = sess.run(self.loss, feed_dict={self.inputs: batch})
         return loss
 
+    def extra_step(self, save_dir=None, prefix=''):
+        images = self.reconstruct_images(self.visualize_batch)
+        display_images(images/self.color_dim, 1, len(images))
+        if save_dir is not None:
+            save_images(images/self.color_dim, prefix, save_dir)
+
     def reconstruct_images(self, batch):
         sess = tf.get_default_session()
         images = sess.run(self.samples_det, feed_dict={self.inputs: batch})
@@ -107,3 +117,4 @@ class PixelCNN(object):
                         feed_dict={self.inputs: images}
                     )[:, i, j, k]
         return images
+
