@@ -1,6 +1,5 @@
 import tensorflow as tf
-import pickle
-import numpy as np
+from datetime import datetime
 import sys
 import scipy
 import os
@@ -24,8 +23,10 @@ def pprint(tensor, msg=""):
     )]):
         return tf.check_numerics(tensor, tensor.name)
 
+
 def get_timestamp():
-    return datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
+    return datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
+
 
 def save_images(images, prefix='', save_dir='./', append_timestamp=False):
     if not os.path.exists(save_dir):
@@ -33,6 +34,7 @@ def save_images(images, prefix='', save_dir='./', append_timestamp=False):
     for idx, image in enumerate(images):
         filename = '{}_img_{}.png'.format(prefix, idx)
         scipy.misc.imsave(os.path.join(save_dir, filename), image)
+
 
 def display_images(images, n_rows, n_cols, width=10, height=10):
     assert len(images) <= n_rows * n_cols

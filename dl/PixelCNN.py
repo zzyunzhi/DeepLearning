@@ -1,10 +1,51 @@
 import tensorflow as tf
-import tensorflow_probability as tfp
 import numpy as np
-from layers import conv2d_mask
 from utils import *
-from datetime import datetime
-import matplotlib.pyplot as plt
+
+
+def conv2d_mask(
+        inputs,
+        n_filters,
+        kernel_shape, # [kernel_height, kernel_width]
+        mask_type, # None, "A" or "B"
+        scope,
+        activation=None,
+        strides=(1, 1), # [column_wise_stride, row_wise_stride]
+        reuse=None,
+        verbose=False,
+):
+    with tf.variable_scope(scope, reuse=reuse):
+        n_channels = int(inputs.get_shape()[-1])
+        kernel_h, kernel_w = kernel_shape
+        stride_h, stride_w = strides
+
+        assert kernel_h % 2 == 1 and kernel_w % 2 == 1
+
+        center_h = kernel_h // 2
+        center_w = kernel_w // 2
+
+        weights = tf.get_variable("weights", [kernel_h, kernel_w, n_channels, n_filters],
+                                  tf.float32, tf.contrib.layers.xavier_initializer())
+
+        mask = np.ones((kernel_h, kernel_w, n_channels, n_filters), dtype=np.float32)
+
+        mask[center_h, center_w+1:, :, :] = 0.
+        mask[center_h+1:, :, :, :] = 0.
+
+        if mask_type == 'A':
+            mask[center_h, center_w, :, :] = 0.
+        else:
+            assert mask_type == 'B'
+        weights.assign(weights * tf.constant(mask, dtype=tf.float32))
+
+        nn = tf.nn.conv2d(input=inputs, filter=weights,
+                          strides=[1, stride_h, stride_w, 1], padding='SAME')
+        biases = tf.get_variable("biases", [n_filters,], tf.float32, tf.zeros_initializer())
+        nn = tf.nn.bias_add(nn, biases)
+        if activation is not None:
+            nn = activation(nn)
+
+    return nn
 
 
 def residual_block(layer_in, hidden_dim, scope, reuse=None):
@@ -26,12 +67,10 @@ class PixelCNN(object):
             self,
             img_size,
             color_dim,
-            visualize_batch,
     ):
         
         self.height, self.width, self.n_channels = img_size
         self.color_dim = color_dim
-        self.visualize_batch = visualize_batch
         self.learning_rate = 1e-3
         self.grad_clip = 1
         self.hidden_dim = 16
@@ -47,7 +86,7 @@ class PixelCNN(object):
             probs = tf.nn.softmax(logits, axis=-1)
             self.samples_det = tf.argmax(probs, axis=-1)
             samples_flattened = tf.random.categorical(logits=tf.reshape(logits, [-1, self.color_dim]), num_samples=1)
-            self.samples = tf.reshape(samples_flattened, [-1, self.height, self.width, self.n_channels])
+            self.samples_prob = tf.reshape(samples_flattened, [-1, self.height, self.width, self.n_channels])
 
     def build_graph(self):
         nn = conv2d_mask(
@@ -91,8 +130,8 @@ class PixelCNN(object):
         loss = sess.run(self.loss, feed_dict={self.inputs: batch})
         return loss
 
-    def extra_step(self, save_dir=None, prefix=''):
-        images = self.reconstruct_images(self.visualize_batch)
+    def show_progress(self, batch, save_dir=None, prefix=''):
+        images = self.reconstruct_images(batch=batch)
         display_images(images/self.color_dim, 1, len(images))
         if save_dir is not None:
             save_images(images/self.color_dim, prefix, save_dir)
@@ -107,7 +146,7 @@ class PixelCNN(object):
         if n_samples == 1:
             run_ph = self.samples_det
         else:
-            run_ph = self.samples
+            run_ph = self.samples_prob
         images = np.zeros((n_samples, self.height, self.width, self.n_channels), dtype='float32')
         for i in range(self.height):
             for j in range(self.width):
