@@ -29,8 +29,7 @@ def get_timestamp():
 
 
 def save_images(images, prefix='', save_dir='./', append_timestamp=False):
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+    os.makedirs(save_dir, exist_ok=True)
     for idx, image in enumerate(images):
         filename = '{}_img_{}.png'.format(prefix, idx)
         scipy.misc.imsave(os.path.join(save_dir, filename), image)
